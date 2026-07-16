@@ -2,7 +2,8 @@
 // 評牌器單元測試 + 蒙地卡羅勝率基準對照
 // 執行：node test/evaluator.test.js
 
-const { evaluate, handName, makeSim, expandRangeSpec, getPresetRange, adviseBet } = require("../poker.js");
+const { evaluate, handName, makeSim, expandRangeSpec, getPresetRange, adviseBet, handClass } = require("../poker.js");
+const gto = require("../gto.js");
 
 // "As" = A♠、"Th" = T♥；花色 s=♠ h=♥ d=♦ c=♣
 const RANKS = "23456789TJQKA";
@@ -153,6 +154,109 @@ console.log("== 下注建議 ==");
   const g = adviseBet({ equity: 0.52, potSize: 0, toCall: 0, position: "BTN", numActiveOpp: 4, street: "flop" });
   assert(f.action === "bet" && f.sizePct === 33, "52% 單挑有位置應小注 1/3 池，實際 " + f.action);
   assert(g.action === "check", "52% 四人底池應過牌，實際 " + g.action);
+}
+
+console.log("== 手牌類別（handClass）==");
+assert(handClass(card("As"), card("Ah")) === "AA", "As+Ah 應為 AA");
+assert(handClass(card("As"), card("Ks")) === "AKs", "As+Ks 應為 AKs");
+assert(handClass(card("As"), card("Kh")) === "AKo", "As+Kh 應為 AKo");
+assert(handClass(card("Kh"), card("As")) === "AKo", "順序無關：Kh+As 應為 AKo");
+assert(handClass(card("2s"), card("2c")) === "22", "2s+2c 應為 22");
+assert(handClass(card("5d"), card("9d")) === "95s", "5d+9d 應為 95s（高 rank 在前）");
+
+console.log("== GTO 圖表結構驗證 ==");
+{
+  const comboWeight = (cls) => cls.length === 2 ? 6 : (cls[2] === "s" ? 4 : 12);
+  // 圖表集完整性
+  const rfiKeys = Object.keys(gto.GTO_CHARTS.RFI).sort();
+  assert(rfiKeys.join(",") === "BTN,CO,MP,SB,UTG", "RFI 應恰有 UTG/MP/CO/BTN/SB 五張圖");
+  const expected15 = [
+    "MP_vs_UTG", "CO_vs_UTG", "BTN_vs_UTG", "SB_vs_UTG", "BB_vs_UTG",
+    "CO_vs_MP", "BTN_vs_MP", "SB_vs_MP", "BB_vs_MP",
+    "BTN_vs_CO", "SB_vs_CO", "BB_vs_CO",
+    "SB_vs_BTN", "BB_vs_BTN", "BB_vs_SB"
+  ];
+  const vsKeys = Object.keys(gto.GTO_CHARTS.VS_RFI);
+  assert(vsKeys.length === 15 && expected15.every((k) => vsKeys.includes(k)), "VS_RFI 應恰有 15 個守方×開池方對局");
+
+  let structOK = true, shadowOK = true, sumOK = true;
+  for (const type of ["RFI", "VS_RFI"]) {
+    for (const key of Object.keys(gto.GTO_CHARTS[type])) {
+      const matrix = gto.gtoChartMatrix(type, key);
+      if (Object.keys(matrix).length !== 169) { structOK = false; console.error("  " + type + "/" + key + " 鍵數 ≠ 169"); }
+      for (const cls of Object.keys(matrix)) {
+        const sum = matrix[cls].reduce((s, a) => s + a.freq, 0);
+        if (sum !== 100 || matrix[cls].some((a) => a.freq <= 0 || a.freq > 100)) {
+          sumOK = false; console.error("  " + type + "/" + key + " " + cls + " 頻率異常");
+        }
+      }
+      // 先匹配先贏：每條 entry 至少要貢獻一個新類別（抓排序錯誤造成的完全遮蔽）
+      const seen = new Set();
+      for (const [spec] of gto.GTO_CHARTS[type][key]) {
+        let fresh = 0;
+        for (const cls of gto._expandClasses(spec)) {
+          if (!seen.has(cls)) { seen.add(cls); fresh++; }
+        }
+        if (fresh === 0) { shadowOK = false; console.error("  " + type + "/" + key + " 完全被遮蔽的 entry: " + spec); }
+      }
+    }
+  }
+  assert(structOK, "所有圖表編譯後應恰為 169 類");
+  assert(sumOK, "所有策略頻率應在 (0,100] 且含 fold 補滿恰為 100");
+  assert(shadowOK, "不應有完全被前面 entry 遮蔽的 entry");
+
+  // combo 加權寬度（GTO 常識 spot check）
+  const width = (type, key, acts) => {
+    const m = gto.gtoChartMatrix(type, key);
+    let s = 0;
+    for (const cls of Object.keys(m)) {
+      for (const a of m[cls]) if (acts.includes(a.action)) s += comboWeight(cls) * a.freq / 100;
+    }
+    return s / 1326;
+  };
+  const rfiW = {};
+  for (const p of ["UTG", "MP", "CO", "BTN"]) rfiW[p] = width("RFI", p, ["raise"]);
+  assert(rfiW.UTG < rfiW.MP && rfiW.MP < rfiW.CO && rfiW.CO < rfiW.BTN, "RFI 寬度應單調 UTG < MP < CO < BTN");
+  assert(rfiW.BTN >= 0.40, "BTN RFI 應 ≥ 40% 組合，實際 " + (rfiW.BTN * 100).toFixed(1) + "%");
+  const bbVsBtn = width("VS_RFI", "BB_vs_BTN", ["call", "3bet"]);
+  const bbVsUtg = width("VS_RFI", "BB_vs_UTG", ["call", "3bet"]);
+  assert(bbVsBtn >= 0.45, "BB 對 BTN 開池防守應 ≥ 45%，實際 " + (bbVsBtn * 100).toFixed(1) + "%");
+  assert(bbVsUtg < bbVsBtn, "BB 對 UTG 防守應窄於對 BTN");
+}
+
+console.log("== GTO 查表 spot check ==");
+{
+  const freqOf = (strat, action) => { const a = strat.find((x) => x.action === action); return a ? a.freq : 0; };
+  assert(freqOf(gto.gtoLookup("RFI", "UTG", "AA"), "raise") === 100, "UTG AA 應 100% 開池");
+  assert(freqOf(gto.gtoLookup("RFI", "UTG", "AKs"), "raise") === 100, "UTG AKs 應 100% 開池");
+  assert(freqOf(gto.gtoLookup("RFI", "UTG", "72o"), "fold") === 100, "UTG 72o 應 100% 棄牌");
+  assert(freqOf(gto.gtoLookup("VS_RFI", "BB_vs_BTN", "22"), "call") > 0, "BB 對 BTN 拿 22 應有跟注頻率");
+  // AKs 對任何開池都應以 3-bet 為主
+  let aksOK = true;
+  for (const key of Object.keys(gto.GTO_CHARTS.VS_RFI)) {
+    if (freqOf(gto.gtoLookup("VS_RFI", key, "AKs"), "3bet") < 50) { aksOK = false; console.error("  AKs 在 " + key + " 3bet < 50"); }
+  }
+  assert(aksOK, "AKs 對所有 15 種開池 3-bet 頻率應 ≥ 50%");
+}
+
+console.log("== GTO API 邊界 ==");
+{
+  assert(gto.gtoLookup("RFI", "BB", "AA") === null, "BB 沒有 RFI 圖，應回 null");
+  assert(gto.gtoAdvise({ handClass: "AA", heroPos: "UTG", openerPos: "CO" }) === null, "hero 在開池方之前，應回 null");
+  let threw = false;
+  try { gto.gtoLookup("RFI", "UTG", "XX"); } catch (e) { threw = true; }
+  assert(threw, "未知手牌類別應 throw");
+  assert(gto.gtoAdvise({ handClass: "AA", heroPos: "SB" }).sizing.rfiBB === 3, "SB RFI 尺度應為 3bb");
+  assert(gto.gtoAdvise({ handClass: "AA", heroPos: "BTN" }).sizing.rfiBB === 2.5, "BTN RFI 尺度應為 2.5bb");
+  const ip = gto.gtoAdvise({ handClass: "AA", heroPos: "BTN", openerPos: "CO" });
+  assert(ip.inPosition === true && ip.sizing.threeBetFactor === 3, "BTN 對 CO 應為 IP、3-bet 3 倍");
+  const oop = gto.gtoAdvise({ handClass: "AA", heroPos: "SB", openerPos: "BTN" });
+  assert(oop.inPosition === false && oop.sizing.threeBetFactor === 4, "SB 對 BTN 應為 OOP、3-bet 4 倍");
+  const bbSb = gto.gtoAdvise({ handClass: "AA", heroPos: "BB", openerPos: "SB" });
+  assert(bbSb.inPosition === true, "BB 對 SB 翻後有位置，inPosition 應為 true");
+  // actions 依頻率降冪、primary 為最高頻
+  const mixed = gto.gtoAdvise({ handClass: "AQs", heroPos: "BB", openerPos: "UTG" });
+  assert(mixed.actions.length >= 2 && mixed.actions[0].freq >= mixed.actions[1].freq, "混合策略 actions 應依頻率降冪");
 }
 
 console.log("");

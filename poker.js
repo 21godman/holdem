@@ -10,6 +10,14 @@ function cardText(c) {
   return RANK_CHARS[c % 13] + SUIT_CHARS[(c / 13) | 0];
 }
 
+// 兩張牌 → 169 類手牌字串："AA"、"AKs"、"AKo"（高 rank 在前）
+function handClass(c1, c2) {
+  let r1 = c1 % 13, r2 = c2 % 13;
+  if (r1 < r2) { const t = r1; r1 = r2; r2 = t; }
+  if (r1 === r2) return RANK_CHARS[r1] + RANK_CHARS[r2];
+  return RANK_CHARS[r1] + RANK_CHARS[r2] + (((c1 / 13) | 0) === ((c2 / 13) | 0) ? "s" : "o");
+}
+
 // 回傳順子的最大 rank（含 A-5 wheel），沒有順子回傳 -1
 function straightHigh(rankMask) {
   for (let hi = 12; hi >= 4; hi--) {
@@ -307,7 +315,7 @@ function adviseBet(opts) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     RANK_CHARS, SUIT_CHARS, HAND_NAMES, POSITIONS, POSITION_RANGES,
-    cardText, evaluate, handName, makeSim, straightHigh,
+    cardText, handClass, evaluate, handName, makeSim, straightHigh,
     expandRangeSpec, getPresetRange, adviseBet
   };
 }

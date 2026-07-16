@@ -6,14 +6,15 @@
 
 ```bash
 node .claude/serve.js          # 開發伺服器 → http://localhost:8642（python3 http.server 在此機器被沙盒擋住，勿用）
-node test/evaluator.test.js    # 36 項測試：評牌器 + 勝率基準對照，改過 poker.js 後必跑
+node test/evaluator.test.js    # 89 項測試：評牌器 + 勝率基準 + GTO 圖表驗證，改過 poker.js 或 gto.js 後必跑
 ```
 
 ## 架構
 
-- `poker.js` — 唯一的核心邏輯檔，同時被三種環境載入：瀏覽器 `<script>`（全域函式）、`worker.js` 的 `importScripts`、node 測試的 `require`（檔尾有 `module.exports`）。改動時三邊都要相容。除評牌與模擬外，還有：`expandRangeSpec`（"22+, ATs+" 範圍字串 → 組合陣列）、`POSITION_RANGES`/`getPresetRange`（各位置預設開牌範圍，展開結果有模組層級快取）、`adviseBet`（規則式下注建議，非 GTO）。
+- `poker.js` — 唯一的核心邏輯檔，同時被三種環境載入：瀏覽器 `<script>`（全域函式）、`worker.js` 的 `importScripts`、node 測試的 `require`（檔尾有 `module.exports`）。改動時三邊都要相容。除評牌與模擬外，還有：`expandRangeSpec`（"22+, ATs+" 範圍字串 → 組合陣列）、`POSITION_RANGES`/`getPresetRange`（各位置預設開牌範圍，展開結果有模組層級快取）、`adviseBet`（規則式下注建議，翻後與圖表對應不到時用）、`handClass`（兩張牌 → "AKs" 等 169 類字串）。
+- `gto.js` — 翻前 GTO 查表（近似公開 100bb 6-max 現金桌解，頻率量化到 25/50/75/100）。雙環境載入：瀏覽器 `<script>` + node `require`（worker 不載，別依賴 poker.js）。圖表編碼：有序 `[範圍spec, 策略碼]` 陣列，**先匹配先贏**，未列出 = 100% 棄牌；spec 文法支援 dash 下行（`"A9s-A2s"`、`"T9s-54s"`），與 poker.js 的 `expandRangeSpec` 是不同解析器。改過圖表資料後必跑測試——結構驗證會抓被遮蔽的 entry 與頻率錯誤。
 - `worker.js` — Web Worker 包裝，分批（每批 10,000 次）跑模擬並回報進度；以遞增的 job id 取消過期任務。訊息協定：`{id, hero, board, opponents: [{range, folded}], iterations}`；棄牌者在 worker 端過濾掉，舊的 `numOpp` 數字協定仍相容。`app.js` 的 `mainThreadSim` 有一份相同邏輯，兩邊要同步改。
-- `app.js` — 全部 UI 狀態與 DOM 操作。Worker 建立失敗時自動退回主執行緒分批模擬（`mainThreadSim`）。
+- `app.js` — 全部 UI 狀態與 DOM 操作。Worker 建立失敗時自動退回主執行緒分批模擬（`mainThreadSim`）。翻前建議優先走 gto.js 查表：`detectPreflopScenario` 從現有 UI 推斷情境（待跟額 0 → 首入；待跟額 >0 且恰一位未棄牌對手選了位置開池範圍 → 面對該位置開池），對應不到圖表才退回 `adviseBet` 並在註記標明。
 - `sw.js` — cache-first 離線快取。**改動任何靜態檔後要把 `CACHE` 版本字串遞增**（如 `poker-equity-v1` → `v2`），否則已安裝的 PWA 拿到舊快取。
 
 ## 核心慣例

@@ -126,7 +126,47 @@
 
   // ---- 下注建議 ----
   const ACTION_TEXT = { fold: "棄牌", check: "過牌", call: "跟注", bet: "下注", raise: "加注" };
+  const GTO_ACTION_TEXT = { raise: "加注", "3bet": "3-bet", call: "跟注", fold: "棄牌" };
   const STREETS = ["preflop", "preflop", "preflop", "flop", "turn", "river"];
+
+  // 從現有 UI 推斷翻前情境：null = 無法對應圖表（退回簡化模型）
+  // { openerPos: null } = 首入開池（RFI）；{ openerPos: "CO" } = 面對 CO 開池
+  function detectPreflopScenario() {
+    const toCall = parseFloat(el("toCall").value) || 0;
+    if (toCall === 0) {
+      return heroPos === "BB" ? null : { openerPos: null }; // BB 沒有「首入」情境
+    }
+    const active = opponents.filter((o) => !o.folded);
+    if (active.length !== 1) return null;
+    const m = /^(UTG|MP|CO|BTN|SB)_OPEN$/.exec(active[0].range);
+    if (!m) return null;
+    const openerPos = m[1];
+    // 守方必須在開池方之後行動（POSITIONS 即翻前行動順序）
+    if (POSITIONS.indexOf(heroPos) <= POSITIONS.indexOf(openerPos)) return null;
+    return { openerPos: openerPos };
+  }
+
+  function renderGtoAdvice(g, toCall) {
+    const primary = g.actions[0];
+    let text = "建議（GTO 翻前查表）：";
+    if (primary.action === "raise") {
+      text += "加注至 " + g.sizing.rfiBB + "bb";
+    } else if (primary.action === "3bet") {
+      const f = g.sizing.threeBetFactor;
+      text += toCall > 0
+        ? "3-bet 至約 " + Math.round(toCall * f) + "（開池額 " + f + " 倍）"
+        : "3-bet 至開池額 " + f + " 倍";
+    } else {
+      text += GTO_ACTION_TEXT[primary.action];
+    }
+    const freqs = g.actions.map((a) => GTO_ACTION_TEXT[a.action] + " " + a.freq + "%").join("／");
+    const chartLabel = g.openerPos
+      ? g.heroPos + " 對抗 " + g.openerPos + " 開池"
+      : g.heroPos + " 首入開池";
+    el("adviceAction").textContent = text;
+    el("adviceReason").textContent = "頻率：" + freqs + "・使用圖表：" + chartLabel;
+    el("adviceNote").textContent = "近似公開 100bb 6-max 現金桌 GTO 解，僅供參考";
+  }
 
   function renderAdvice() {
     const box = el("advice");
@@ -134,13 +174,30 @@
     const potSize = parseFloat(el("potSize").value) || 0;
     const toCall = parseFloat(el("toCall").value) || 0;
     const boardLen = slots.slice(2).filter((c) => c !== null).length;
+    const street = STREETS[boardLen];
+
+    // 翻前優先走 GTO 查表；對應不到圖表才退回簡化模型
+    if (street === "preflop" && slots[0] !== null && slots[1] !== null) {
+      const sc = detectPreflopScenario();
+      const g = sc && gtoAdvise({
+        handClass: handClass(slots[0], slots[1]),
+        heroPos: heroPos,
+        openerPos: sc.openerPos
+      });
+      if (g) {
+        renderGtoAdvice(g, toCall);
+        box.hidden = false;
+        return;
+      }
+    }
+
     const a = adviseBet({
       equity: lastEquity,
       potSize: potSize,
       toCall: toCall,
       position: heroPos,
       numActiveOpp: activeOppCount(),
-      street: STREETS[boardLen]
+      street: street
     });
     let text = "建議：" + ACTION_TEXT[a.action];
     if (a.sizePct) {
@@ -149,6 +206,9 @@
     }
     el("adviceAction").textContent = text;
     el("adviceReason").textContent = a.reason;
+    el("adviceNote").textContent = street === "preflop"
+      ? "情境無法對應翻前 GTO 圖表，改用簡化模型，僅供參考"
+      : "簡化模型建議，僅供參考";
     box.hidden = false;
   }
 
