@@ -1,0 +1,16 @@
+{
+  "name": "撲克勝率",
+  "short_name": "撲克勝率",
+  "description": "德州撲克勝率計算器：手牌 + 公共牌 + 對手人數，蒙地卡羅即時模擬",
+  "lang": "zh-Hant",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d3b2e",
+  "theme_color": "#0d3b2e",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

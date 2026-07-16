@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>撲克勝率</title>
+  <meta name="theme-color" content="#0d3b2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="撲克勝率">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>撲克勝率</h1>
+    <button id="resetBtn" type="button">重置牌局</button>
+  </header>
+
+  <main>
+    <section id="results" class="empty">
+      <div class="big-stat">
+        <span class="big-label">勝率</span>
+        <span id="winPct" class="big-value">–</span>
+      </div>
+      <div class="sub-stats">
+        <div><span class="sub-label">平手</span><span id="tiePct">–</span></div>
+        <div><span class="sub-label">敗率</span><span id="losePct">–</span></div>
+        <div><span class="sub-label">權益</span><span id="equityPct">–</span></div>
+      </div>
+      <div id="handName"></div>
+      <div id="status"></div>
+      <div id="advice" hidden>
+        <div id="adviceAction"></div>
+        <div id="adviceReason"></div>
+        <div class="advice-note">簡化模型建議，僅供參考</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>對手（點「棄」標記棄牌）</h2>
+      <div id="oppList"></div>
+      <button id="addOppBtn" type="button">＋ 新增對手</button>
+    </section>
+
+    <section class="panel">
+      <h2>我的位置與底池</h2>
+      <div class="hero-ctx">
+        <label>位置
+          <select id="heroPos"></select>
+        </label>
+        <label>底池大小
+          <input id="potSize" type="number" inputmode="decimal" min="0" placeholder="選填">
+        </label>
+        <label>需跟注額
+          <input id="toCall" type="number" inputmode="decimal" min="0" placeholder="0">
+        </label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="slots-row">
+        <div class="slot-group">
+          <h2>我的手牌</h2>
+          <div id="heroSlots" class="slots"></div>
+        </div>
+        <div class="slot-group">
+          <h2>公共牌</h2>
+          <div id="boardSlots" class="slots"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>選牌</h2>
+      <div id="picker"></div>
+    </section>
+  </main>
+  <script src="poker.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
