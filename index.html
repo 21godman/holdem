@@ -84,38 +84,78 @@
     </div>
 
     <div id="quizView" hidden>
-      <section class="panel quiz-stats">
-        <div><span class="sub-label">題數</span><span id="qsTotal">0</span></div>
-        <div><span class="sub-label">正確率</span><span id="qsAcc">–</span></div>
-        <div><span class="sub-label">連對</span><span id="qsStreak">0</span></div>
-        <div><span class="sub-label">最佳連對</span><span id="qsBest">0</span></div>
-      </section>
 
-      <section class="panel">
-        <div id="quizTag"></div>
-        <div id="quizPrompt"></div>
-        <div class="quiz-cards-row">
-          <div class="quiz-card-group">
-            <h2>你的手牌</h2>
-            <div id="quizHand" class="quiz-cards"></div>
-          </div>
-          <div class="quiz-card-group" id="quizBoardGroup" hidden>
-            <h2>公共牌</h2>
-            <div id="quizBoard" class="quiz-cards"></div>
-          </div>
-        </div>
-        <div id="quizChoices"></div>
-        <div id="quizFeedback" hidden>
-          <div id="quizVerdict"></div>
-          <div id="quizExplain"></div>
-        </div>
-        <button id="quizNextBtn" type="button" hidden>下一題 →</button>
-      </section>
+      <!-- 關卡地圖（練習模式首頁） -->
+      <div id="quizHome">
+        <section class="panel">
+          <h2>關卡（每關 10 題，7 分過關解鎖下一關）</h2>
+          <div id="quizLevels"></div>
+        </section>
 
-      <section class="panel" id="quizWeakPanel" hidden>
-        <h2>待加強的情境（答題 ≥5 且正確率 &lt;60%）</h2>
-        <div id="quizWeak"></div>
-      </section>
+        <section class="panel">
+          <button id="quizFreeBtn" type="button">自由練習（無限出題）</button>
+          <div class="quiz-stats quiz-home-stats">
+            <div><span class="sub-label">總題數</span><span id="qsTotal">0</span></div>
+            <div><span class="sub-label">正確率</span><span id="qsAcc">–</span></div>
+            <div><span class="sub-label">最佳連對</span><span id="qsBest">0</span></div>
+          </div>
+        </section>
+
+        <section class="panel" id="quizWeakPanel" hidden>
+          <h2>待加強的情境（答題 ≥5 且正確率 &lt;60%）</h2>
+          <div id="quizWeak"></div>
+        </section>
+
+        <section class="panel">
+          <button id="quizResetBtn" type="button">重設所有練習紀錄</button>
+        </section>
+      </div>
+
+      <!-- 答題 -->
+      <div id="quizPlay" hidden>
+        <section class="panel quiz-play-header" id="quizPlayHeader">
+          <div id="quizPlayInfo"></div>
+          <button id="quizExitBtn" type="button">離開</button>
+        </section>
+
+        <section class="panel">
+          <div id="quizTag"></div>
+          <div id="quizPrompt"></div>
+          <div class="quiz-cards-row">
+            <div class="quiz-card-group">
+              <h2>你的手牌</h2>
+              <div id="quizHand" class="quiz-cards"></div>
+            </div>
+            <div class="quiz-card-group" id="quizBoardGroup" hidden>
+              <h2>公共牌</h2>
+              <div id="quizBoard" class="quiz-cards"></div>
+            </div>
+          </div>
+          <div id="quizChoices"></div>
+          <div id="quizFeedback" hidden>
+            <div id="quizVerdict"></div>
+            <div id="quizExplain"></div>
+          </div>
+          <button id="quizNextBtn" type="button" hidden>下一題 →</button>
+        </section>
+      </div>
+
+      <!-- 關卡結算 -->
+      <div id="quizResultView" hidden>
+        <section class="panel quiz-result">
+          <div id="quizResultTitle"></div>
+          <div id="quizStars"></div>
+          <div id="quizScore"></div>
+          <div id="quizStarHint"></div>
+          <div id="quizReview"></div>
+          <div class="quiz-result-btns">
+            <button id="quizRetryBtn" type="button">重打本關</button>
+            <button id="quizNextLevelBtn" type="button">下一關 →</button>
+            <button id="quizMapBtn" type="button">回關卡列表</button>
+          </div>
+        </section>
+      </div>
+
     </div>
   </main>
   <script src="poker.js"></script>

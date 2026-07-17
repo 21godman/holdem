@@ -106,6 +106,23 @@ function interestingClasses(chartType, chartKey) {
   return out;
 }
 
+// 簡單牌池 = 全 169 類 − 有趣集合（離決策邊界遠的純策略牌），
+// 按主行動分成 fold / act 兩桶——簡單題若均勻抽會幾乎都是無腦棄牌，出題時先抽桶再抽牌。
+const _easyCache = {};
+function easyClasses(chartType, chartKey) {
+  const ck = chartType + ":" + chartKey;
+  if (_easyCache[ck]) return _easyCache[ck];
+  const matrix = _GTO.gtoChartMatrix(chartType, chartKey);
+  const interesting = interestingClasses(chartType, chartKey);
+  const out = { fold: [], act: [] };
+  for (const c in matrix) {
+    if (interesting.indexOf(c) >= 0) continue;
+    (_primaryAction(matrix[c]) === "fold" ? out.fold : out.act).push(c);
+  }
+  _easyCache[ck] = out;
+  return out;
+}
+
 // ---- 隨機出題 ----
 
 // 回傳翻前決策題：{type, chartType, chartKey, heroPos, openerPos, handClass, cards, actions, strat}
@@ -151,6 +168,83 @@ function generateEquityScenario(rng) {
   };
 }
 
+// ---- 關卡（戰役模式）----
+// 每關 10 題，得分 = 答對 + 0.5×部分正確；≥7 過關解鎖下一關。
+// spec：kind（preflop/equity/mix）、chartType 或 heroPos 過濾圖表、
+//       pool（easy=離邊界遠的純策略牌／interesting=混頻＋邊界牌）、
+//       spacing（勝率選項間距）、oppCounts（對手數候選）。
+
+const QUIZ_LEVELS = [
+  { id: 1, title: "牛刀小試", tag: "勝率入門", desc: "估勝率，選項間距大，對手固定一位",
+    count: 10, spec: { kind: "equity", spacing: 16, oppCounts: [1] } },
+  { id: 2, title: "首入基礎", tag: "開池 or 棄牌", desc: "無人進池時該開就開、該丟就丟",
+    count: 10, spec: { kind: "preflop", chartType: "RFI", pool: "easy" } },
+  { id: 3, title: "防守基礎", tag: "面對開池", desc: "面對各位置開池的明確決策",
+    count: 10, spec: { kind: "preflop", chartType: "VS_RFI", pool: "easy" } },
+  { id: 4, title: "勝率進階", tag: "精算權益", desc: "選項間距縮小，最多三位對手",
+    count: 10, spec: { kind: "equity", spacing: 8, oppCounts: [1, 2, 3] } },
+  { id: 5, title: "首入進階", tag: "邊界手牌", desc: "全是開池範圍邊緣的難題",
+    count: 10, spec: { kind: "preflop", chartType: "RFI", pool: "interesting" } },
+  { id: 6, title: "防守進階", tag: "混合頻率", desc: "3-bet／跟注／棄牌的灰色地帶",
+    count: 10, spec: { kind: "preflop", chartType: "VS_RFI", pool: "interesting" } },
+  { id: 7, title: "盲位攻防", tag: "SB/BB 專精", desc: "只考盲位情境的邊界手牌",
+    count: 10, spec: { kind: "preflop", heroPos: ["SB", "BB"], pool: "interesting" } },
+  { id: 8, title: "綜合大考", tag: "全範圍", desc: "翻前難題與勝率精算混出",
+    count: 10, spec: { kind: "mix", pool: "interesting", spacing: 8, oppCounts: [1, 2, 3] } }
+];
+
+function _levelSpots(spec) {
+  return _allSpots().filter((sp) =>
+    (!spec.chartType || sp.chartType === spec.chartType) &&
+    (!spec.heroPos || spec.heroPos.indexOf(sp.heroPos) >= 0));
+}
+
+function _levelPreflopQuestion(spec, rng) {
+  const spots = _levelSpots(spec);
+  const spot = spots[(rng() * spots.length) | 0];
+  let cls;
+  if (spec.pool === "easy") {
+    // 先 50/50 抽桶再抽牌：簡單池的棄牌桶遠大於行動桶，均勻抽會整關棄垃圾牌
+    const buckets = easyClasses(spot.chartType, spot.chartKey);
+    let bucket = rng() < 0.5 ? buckets.act : buckets.fold;
+    if (!bucket.length) bucket = bucket === buckets.act ? buckets.fold : buckets.act;
+    cls = bucket[(rng() * bucket.length) | 0];
+  } else {
+    const pool = interestingClasses(spot.chartType, spot.chartKey);
+    cls = pool[(rng() * pool.length) | 0];
+  }
+  return {
+    type: "preflop",
+    chartType: spot.chartType, chartKey: spot.chartKey,
+    heroPos: spot.heroPos, openerPos: spot.openerPos,
+    handClass: cls,
+    cards: classToCards(cls, rng),
+    actions: spot.openerPos ? ["3bet", "call", "fold"] : ["raise", "call", "fold"],
+    strat: _GTO.gtoLookup(spot.chartType, spot.chartKey, cls)
+  };
+}
+
+// 依關卡 spec 出一題，形狀與 generatePreflopQuestion / generateEquityScenario 相同
+//（equity 題多帶 spacing 供選項產生用）
+function generateLevelQuestion(level, rng) {
+  rng = rng || Math.random;
+  const spec = level.spec;
+  const kind = spec.kind === "mix" ? (rng() < 0.5 ? "preflop" : "equity") : spec.kind;
+  if (kind === "preflop") return _levelPreflopQuestion(spec, rng);
+  const q = generateEquityScenario(rng);
+  if (spec.oppCounts) q.oppCount = spec.oppCounts[(rng() * spec.oppCounts.length) | 0];
+  q.spacing = spec.spacing || 8;
+  return q;
+}
+
+// 得分 → 星數：滿分 3 星、≥8.5 兩星、≥7 一星（過關）、否則 0
+function quizLevelStars(score) {
+  if (score >= 10) return 3;
+  if (score >= 8.5) return 2;
+  if (score >= 7) return 1;
+  return 0;
+}
+
 // ---- 評分 ----
 
 // 圖表頻率量化為 25/50/75/100：所選行動 freq ≥50 → correct、>0 → partial、0 → wrong
@@ -162,11 +256,12 @@ function gradePreflop(strat, chosenAction) {
   return "wrong";
 }
 
-// 四選一勝率百分點選項：含正解 round(E·100)，干擾項間隔至少 8 點，範圍 [3,97]
-function buildEquityOptions(equity, rng) {
+// 四選一勝率百分點選項：含正解 round(E·100)，干擾項間隔至少 spacing 點（預設 8），範圍 [3,97]
+function buildEquityOptions(equity, rng, spacing) {
   rng = rng || Math.random;
+  const s = spacing || 8;
   const correct = Math.round(equity * 100);
-  const offsets = [-16, -8, 8, 16, 24, -24, 32, -32];
+  const offsets = [-2 * s, -s, s, 2 * s, 3 * s, -3 * s, 4 * s, -4 * s];
   for (let i = 3; i > 0; i--) { // 只打亂前四個基本偏移，後四個為補位備援
     const j = (rng() * (i + 1)) | 0;
     const t = offsets[i]; offsets[i] = offsets[j]; offsets[j] = t;
@@ -321,13 +416,38 @@ function curatedToQuestion(entry, rng) {
 
 function quizStatsInit() {
   return {
-    v: 1, total: 0, correct: 0, partial: 0,
+    v: 2, total: 0, correct: 0, partial: 0,
     byType: {},   // { preflop: {t,c,p}, equity: {t,c,p} }
     byChart: {},  // { "RFI:UTG": {t,c,p}, ... } 弱點分析用（僅翻前題）
     streak: 0, bestStreak: 0,
     seenCurated: [],
-    history: []   // {ts, type, key, result}，上限 100 筆
+    history: [],  // {ts, type, key, result}，上限 100 筆
+    campaign: { unlocked: 1, stars: {}, best: {} } // 關卡進度：stars/best 以 levelId 為鍵
   };
+}
+
+// localStorage 解析結果 → 現行 schema。v1 補 campaign 升 v2；認不得的輸入回 null（呼叫端重建）。
+function quizStatsMigrate(parsed) {
+  if (!parsed || typeof parsed !== "object") return null;
+  if (parsed.v === 2) return parsed;
+  if (parsed.v === 1) {
+    const s = JSON.parse(JSON.stringify(parsed));
+    s.v = 2;
+    s.campaign = { unlocked: 1, stars: {}, best: {} };
+    return s;
+  }
+  return null;
+}
+
+// 關卡結算（純 reducer）：best/stars 只升不降；本關 ≥7 分且正是最前緣關卡時解鎖下一關
+function quizCampaignUpdate(stats, levelId, score) {
+  const s = JSON.parse(JSON.stringify(stats));
+  const c = s.campaign;
+  const stars = quizLevelStars(score);
+  if (!(c.best[levelId] >= score)) c.best[levelId] = score;
+  if (!(c.stars[levelId] >= stars)) c.stars[levelId] = stars;
+  if (score >= 7 && levelId === c.unlocked && c.unlocked < QUIZ_LEVELS.length) c.unlocked++;
+  return s;
 }
 
 const QUIZ_HISTORY_MAX = 100;
@@ -379,8 +499,9 @@ function quizWeakSpots(stats) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     QUIZ_BANK, quizParseCard, classToCards, quizChartLabel,
-    interestingClasses, generatePreflopQuestion, generateEquityScenario,
+    interestingClasses, easyClasses, generatePreflopQuestion, generateEquityScenario,
+    QUIZ_LEVELS, generateLevelQuestion, quizLevelStars,
     gradePreflop, gradeEquity, buildEquityOptions, curatedToQuestion,
-    quizStatsInit, quizStatsUpdate, quizWeakSpots
+    quizStatsInit, quizStatsUpdate, quizWeakSpots, quizStatsMigrate, quizCampaignUpdate
   };
 }

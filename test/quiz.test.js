@@ -4,9 +4,10 @@
 
 const {
   QUIZ_BANK, quizParseCard, classToCards, quizChartLabel,
-  interestingClasses, generatePreflopQuestion, generateEquityScenario,
+  interestingClasses, easyClasses, generatePreflopQuestion, generateEquityScenario,
+  QUIZ_LEVELS, generateLevelQuestion, quizLevelStars,
   gradePreflop, gradeEquity, buildEquityOptions, curatedToQuestion,
-  quizStatsInit, quizStatsUpdate, quizWeakSpots
+  quizStatsInit, quizStatsUpdate, quizWeakSpots, quizStatsMigrate, quizCampaignUpdate
 } = require("../quiz.js");
 const { GTO_CHARTS, gtoAdvise, gtoChartMatrix } = require("../gto.js");
 const { makeSim, handClass, POSITIONS } = require("../poker.js");
@@ -181,6 +182,117 @@ console.log("== 成績 reducer ==");
   assert(spots.length === 1 && spots[0].key === "VS_RFI:BB_vs_BTN", "只有 ≥5 題且 <60% 的圖表列為弱點");
   assert(spots[0].label === "BB 對抗 BTN 開池", "弱點標籤格式");
   assert(quizChartLabel("RFI:UTG") === "UTG 首入開池", "RFI 標籤格式");
+}
+
+console.log("== 關卡結構 ==");
+{
+  assert(QUIZ_LEVELS.length === 8, "應有 8 關");
+  QUIZ_LEVELS.forEach((lv, i) => {
+    assert(lv.id === i + 1, "關卡 id 應連號: " + lv.id);
+    assert(lv.count === 10, "每關 10 題");
+    assert(lv.title && lv.tag && lv.desc, "第 " + lv.id + " 關需有標題／副標／說明");
+    assert(["preflop", "equity", "mix"].indexOf(lv.spec.kind) >= 0, "spec.kind 合法");
+  });
+  // 簡單牌池：兩桶皆非空（每張會被簡單關卡用到的圖表）
+  for (const key in GTO_CHARTS.RFI) {
+    const b = easyClasses("RFI", key);
+    assert(b.fold.length > 0 && b.act.length > 0, "RFI:" + key + " 簡單池兩桶皆非空");
+  }
+  for (const key in GTO_CHARTS.VS_RFI) {
+    const b = easyClasses("VS_RFI", key);
+    assert(b.fold.length > 0 && b.act.length > 0, "VS_RFI:" + key + " 簡單池兩桶皆非空");
+    const inter = interestingClasses("VS_RFI", key);
+    for (const c of b.fold.concat(b.act)) {
+      if (inter.indexOf(c) >= 0) { assert(false, "VS_RFI:" + key + " 簡單池不得含有趣牌: " + c); break; }
+    }
+  }
+}
+
+console.log("== 關卡出題規格 ==");
+{
+  for (const lv of QUIZ_LEVELS) {
+    const rng = makeRng(lv.id * 1000 + 1);
+    let sawPreflop = 0, sawEquity = 0;
+    for (let i = 0; i < 200; i++) {
+      const q = generateLevelQuestion(lv, rng);
+      if (q.type === "preflop") {
+        sawPreflop++;
+        const spec = lv.spec;
+        assert(spec.kind !== "equity", "第 " + lv.id + " 關不該出翻前題");
+        if (spec.chartType) assert(q.chartType === spec.chartType, "第 " + lv.id + " 關圖表類型應為 " + spec.chartType);
+        if (spec.heroPos) assert(spec.heroPos.indexOf(q.heroPos) >= 0, "第 " + lv.id + " 關 heroPos 應限 " + spec.heroPos);
+        const inter = interestingClasses(q.chartType, q.chartKey);
+        if (spec.pool === "easy") {
+          assert(inter.indexOf(q.handClass) < 0, "第 " + lv.id + " 關簡單池不得出邊界牌: " + q.handClass);
+        } else {
+          assert(inter.indexOf(q.handClass) >= 0, "第 " + lv.id + " 關困難池應出邊界/混頻牌: " + q.handClass);
+        }
+        assert(handClass(q.cards[0], q.cards[1]) === q.handClass, "cards 對應類別");
+      } else {
+        sawEquity++;
+        assert(lv.spec.kind !== "preflop", "第 " + lv.id + " 關不該出勝率題");
+        assert(q.spacing === (lv.spec.spacing || 8), "第 " + lv.id + " 關 spacing 應為 " + lv.spec.spacing);
+        if (lv.spec.oppCounts) assert(lv.spec.oppCounts.indexOf(q.oppCount) >= 0, "第 " + lv.id + " 關對手數限制");
+      }
+    }
+    if (lv.spec.kind === "mix") assert(sawPreflop > 30 && sawEquity > 30, "綜合關兩種題型都要出現");
+  }
+  // spacing=16 的選項最小間隔 ≥16
+  const rng = makeRng(11);
+  for (const eq of [0.2, 0.5, 0.8]) {
+    for (let i = 0; i < 30; i++) {
+      const opts = buildEquityOptions(eq, rng, 16);
+      const sorted = opts.slice().sort((a, b) => a - b);
+      assert(opts.length === 4, "spacing 16 仍應 4 選項");
+      for (let k = 1; k < 4; k++) assert(sorted[k] - sorted[k - 1] >= 16, "間隔應 ≥16: " + sorted.join(","));
+      for (const o of opts) assert(o >= 3 && o <= 97, "選項應在 [3,97]: " + o);
+    }
+  }
+}
+
+console.log("== 星等與關卡進度 ==");
+{
+  assert(quizLevelStars(6.5) === 0, "6.5 分 0 星（未過關）");
+  assert(quizLevelStars(7) === 1, "7 分 1 星");
+  assert(quizLevelStars(8) === 1, "8 分 1 星");
+  assert(quizLevelStars(8.5) === 2, "8.5 分 2 星");
+  assert(quizLevelStars(9.5) === 2, "9.5 分 2 星");
+  assert(quizLevelStars(10) === 3, "10 分 3 星");
+
+  const s0 = quizStatsInit();
+  assert(s0.v === 2 && s0.campaign.unlocked === 1, "初始 schema v2、解鎖第 1 關");
+  const frozen = JSON.stringify(s0);
+  let s = quizCampaignUpdate(s0, 1, 8.5);
+  assert(JSON.stringify(s0) === frozen, "campaign reducer 不得改動輸入");
+  assert(s.campaign.unlocked === 2 && s.campaign.stars[1] === 2 && s.campaign.best[1] === 8.5, "過關解鎖並記星");
+  s = quizCampaignUpdate(s, 1, 7); // 重打低分
+  assert(s.campaign.stars[1] === 2 && s.campaign.best[1] === 8.5, "星星與 best 只升不降");
+  assert(s.campaign.unlocked === 2, "重打已過的關不再推進解鎖");
+  s = quizCampaignUpdate(s, 5, 10); // 打還沒解鎖到的關（防禦：不跳關解鎖）
+  assert(s.campaign.unlocked === 2, "非前緣關卡不得推進解鎖");
+  assert(s.campaign.stars[5] === 3, "但星星照記");
+  s = quizCampaignUpdate(s, 2, 6.5); // 未達標
+  assert(s.campaign.unlocked === 2, "未達 7 分不解鎖");
+  for (let id = 2; id <= 8; id++) s = quizCampaignUpdate(s, id, 10);
+  assert(s.campaign.unlocked === 8, "全破後 unlocked 停在 8（無第 9 關）");
+}
+
+console.log("== schema 遷移 ==");
+{
+  const v1 = {
+    v: 1, total: 42, correct: 30, partial: 4,
+    byType: { preflop: { t: 20, c: 15, p: 2 } }, byChart: { "RFI:UTG": { t: 5, c: 3, p: 0 } },
+    streak: 3, bestStreak: 9, seenCurated: ["p01"], history: [{ ts: 1, type: "preflop", key: "AKs", result: "correct" }]
+  };
+  const m = quizStatsMigrate(v1);
+  assert(m.v === 2 && m.total === 42 && m.bestStreak === 9 && m.seenCurated[0] === "p01", "v1 升 v2 保留原統計");
+  assert(m.campaign.unlocked === 1 && Object.keys(m.campaign.stars).length === 0, "v1 升 v2 補初始 campaign");
+  assert(v1.v === 1 && !v1.campaign, "遷移不改動輸入物件");
+  const v2 = quizStatsInit();
+  assert(quizStatsMigrate(v2) === v2, "v2 原樣通過");
+  assert(quizStatsMigrate(null) === null, "null → null");
+  assert(quizStatsMigrate("junk") === null, "字串 → null");
+  assert(quizStatsMigrate({ v: 99 }) === null, "未知版本 → null");
 }
 
 console.log("== 精選題庫驗證 ==");
