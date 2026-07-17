@@ -1,6 +1,6 @@
 "use strict";
 // Cache-first service worker：預快取全部靜態檔，離線可用
-const CACHE = "poker-equity-v5";
+const CACHE = "poker-equity-v6";
 const ASSETS = [
   "./",
   "./index.html",

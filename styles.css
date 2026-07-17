@@ -183,6 +183,7 @@ h2 {
 .hero-ctx { display: flex; gap: 8px; }
 .hero-ctx label {
   flex: 1;
+  min-width: 0; /* number input 有內建最小寬度，不設會撐破手機視窗 */
   display: flex;
   flex-direction: column;
   gap: 4px;
