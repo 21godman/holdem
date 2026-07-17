@@ -1,6 +1,6 @@
 "use strict";
 // Cache-first service worker：預快取全部靜態檔，離線可用
-const CACHE = "poker-equity-v3";
+const CACHE = "poker-equity-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,6 +9,8 @@ const ASSETS = [
   "./gto.js",
   "./worker.js",
   "./app.js",
+  "./quiz.js",
+  "./quiz-ui.js",
   "./manifest.webmanifest",
   "./icons/icon.svg",
   "./icons/icon-180.png",

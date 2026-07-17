@@ -16,10 +16,14 @@
 <body>
   <header>
     <h1>撲克勝率</h1>
-    <button id="resetBtn" type="button">重置牌局</button>
+    <div class="header-btns">
+      <button id="modeBtn" type="button">練習模式</button>
+      <button id="resetBtn" type="button">重置牌局</button>
+    </div>
   </header>
 
   <main>
+    <div id="calcView">
     <section id="results" class="empty">
       <div class="big-stat">
         <span class="big-label">勝率</span>
@@ -77,9 +81,47 @@
       <h2>選牌</h2>
       <div id="picker"></div>
     </section>
+    </div>
+
+    <div id="quizView" hidden>
+      <section class="panel quiz-stats">
+        <div><span class="sub-label">題數</span><span id="qsTotal">0</span></div>
+        <div><span class="sub-label">正確率</span><span id="qsAcc">–</span></div>
+        <div><span class="sub-label">連對</span><span id="qsStreak">0</span></div>
+        <div><span class="sub-label">最佳連對</span><span id="qsBest">0</span></div>
+      </section>
+
+      <section class="panel">
+        <div id="quizTag"></div>
+        <div id="quizPrompt"></div>
+        <div class="quiz-cards-row">
+          <div class="quiz-card-group">
+            <h2>你的手牌</h2>
+            <div id="quizHand" class="quiz-cards"></div>
+          </div>
+          <div class="quiz-card-group" id="quizBoardGroup" hidden>
+            <h2>公共牌</h2>
+            <div id="quizBoard" class="quiz-cards"></div>
+          </div>
+        </div>
+        <div id="quizChoices"></div>
+        <div id="quizFeedback" hidden>
+          <div id="quizVerdict"></div>
+          <div id="quizExplain"></div>
+        </div>
+        <button id="quizNextBtn" type="button" hidden>下一題 →</button>
+      </section>
+
+      <section class="panel" id="quizWeakPanel" hidden>
+        <h2>待加強的情境（答題 ≥5 且正確率 &lt;60%）</h2>
+        <div id="quizWeak"></div>
+      </section>
+    </div>
   </main>
   <script src="poker.js"></script>
   <script src="gto.js"></script>
   <script src="app.js"></script>
+  <script src="quiz.js"></script>
+  <script src="quiz-ui.js"></script>
 </body>
 </html>

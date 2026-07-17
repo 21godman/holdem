@@ -35,7 +35,9 @@ header {
 
 h1 { font-size: 20px; font-weight: 700; letter-spacing: 2px; }
 
-#resetBtn {
+.header-btns { display: flex; gap: 8px; }
+
+#resetBtn, #modeBtn {
   background: transparent;
   border: 1px solid var(--line);
   color: var(--dim);
@@ -43,7 +45,10 @@ h1 { font-size: 20px; font-weight: 700; letter-spacing: 2px; }
   padding: 8px 14px;
   font-size: 14px;
 }
-#resetBtn:active { background: var(--felt-light); }
+#resetBtn:active, #modeBtn:active { background: var(--felt-light); }
+#modeBtn { color: var(--gold); border-color: var(--gold); }
+
+body.quiz #resetBtn { display: none; }
 
 main {
   max-width: 480px;
@@ -244,3 +249,98 @@ h2 {
 .pick.black { color: var(--black); }
 .pick:disabled { opacity: 0.18; }
 .pick:not(:disabled):active { transform: scale(0.92); }
+
+/* ---- 練習模式 ---- */
+/* main 的 gap 佈局由包裹層接手；display:flex 會蓋掉 hidden 屬性，需明確規則還原 */
+#calcView, #quizView {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#calcView[hidden], #quizView[hidden] { display: none; }
+
+.quiz-stats {
+  display: flex;
+  justify-content: space-around;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+#quizTag {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin-bottom: 8px;
+}
+#quizPrompt { font-size: 15px; line-height: 1.5; }
+
+.quiz-cards-row { display: flex; gap: 18px; margin: 12px 0; }
+.quiz-card-group h2 { margin-bottom: 6px; }
+.quiz-cards { display: flex; gap: 5px; }
+.quiz-card {
+  width: 44px;
+  height: 60px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  font-weight: 700;
+}
+.quiz-card.red { color: var(--red); }
+.quiz-card.black { color: var(--black); }
+
+#quizChoices { display: flex; flex-direction: column; gap: 8px; }
+.quiz-choice {
+  width: 100%;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--felt);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.quiz-choice:not(:disabled):active { background: var(--felt-light); }
+.quiz-choice:disabled { opacity: 0.55; }
+.quiz-choice.chosen { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(245, 197, 66, 0.35); }
+.quiz-choice.hit { border-color: var(--gold); background: rgba(245, 197, 66, 0.18); opacity: 1; }
+.quiz-choice.miss { border-color: var(--red); background: rgba(212, 58, 58, 0.18); opacity: 1; }
+#quizComputing { font-size: 13px; color: var(--dim); padding: 6px 0; }
+
+#quizFeedback {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+#quizVerdict { font-size: 17px; font-weight: 700; }
+#quizVerdict.correct { color: var(--gold); }
+#quizVerdict.partial { color: var(--dim); }
+#quizVerdict.wrong { color: #ff7b7b; }
+#quizExplain { margin-top: 6px; font-size: 13px; line-height: 1.6; color: var(--text); }
+#quizExplain .quiz-freq { color: var(--dim); display: block; margin-top: 4px; font-size: 12px; }
+
+#quizNextBtn {
+  width: 100%;
+  height: 44px;
+  margin-top: 12px;
+  border-radius: 10px;
+  border: none;
+  background: var(--gold);
+  color: #1c1c1e;
+  font-size: 15px;
+  font-weight: 700;
+}
+#quizNextBtn:active { opacity: 0.85; }
+
+.quiz-weak-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  padding: 4px 0;
+}
+.quiz-weak-row .acc { color: #ff7b7b; font-variant-numeric: tabular-nums; }
